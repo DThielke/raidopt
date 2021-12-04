@@ -79,95 +79,6 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
     min_mdps = boss_constraints.loc["Min Melee"]
     max_mdps = boss_constraints.loc["Max Melee"]
     min_rdps = n_raiders - n_tanks - n_healers - max_mdps
-
-    roles = player_info["Role"]
-    roles2 = player_info["2nd Role"]
-    classes = player_info["Class"]
-    mains = player_info["Main"]
-    is_tank = (roles == "1-Tank") | (roles2 == "1-Tank")
-    is_healer = (roles == "2-Healer") | (roles2 == "2-Healer")
-    is_mdps = (roles == "3-mDPS") | (roles2 == "3-mDPS")
-    is_rdps = (roles == "4-rDPS") | (roles2 == "4-rDPS")
-
-    # Number of bosses for players are summed across mains/alts
-    main_constraints_min = player_constraints.fillna(0).groupby(mains).max()
-    main_constraints_max = player_constraints.fillna(1).groupby(mains).max()
-    character_constraints_min = player_constraints.fillna(0).astype("int")
-    character_constraints_max = player_constraints.fillna(1).astype("int")
-    # If we're forcing the player to be out for too many bosses, we need to relax the vault constraint
-    min_bosses_per_player = np.minimum(
-        options["Min Bosses for Vault"],
-        n_bosses - (main_constraints_max == 0).sum(axis=1),
-    )
-
-    x = cp.Variable((n_players, n_bosses), integer=True)
-
-    # General constraints:
-    constraints = [
-        x >= 0,
-        x <= 1,
-        x >= character_constraints_min,
-        x <= character_constraints_max,
-        cp.sum(x, axis=0) == n_raiders,
-        is_tank.values @ x >= n_tanks,
-        is_healer.values @ x >= n_healers,
-        is_mdps.values @ x >= min_mdps,
-        is_rdps.values @ x >= min_rdps,
-    ]
-
-    # Class buff constraints:
-    for required_class in [
-        "Monk",
-        "Priest",
-        "Demon Hunter",
-        "Warrior",
-        "Mage",
-        "Warlock",
-    ]:
-        is_class = player_info["Class"] == required_class
-        constraints.append(is_class.values @ x >= 1)
-    for main in player_info["Main"].unique():
-        player_bosses_incl_alts = cp.sum(x[player_info["Main"] == main], axis=0)
-        constraints.append(player_bosses_incl_alts >= main_constraints_min.loc[main])
-        constraints.append(player_bosses_incl_alts <= main_constraints_max.loc[main])
-        constraints.append(cp.sum(player_bosses_incl_alts) >= min_bosses_per_player[main])
-
-    # Custom constraints:
-    has_speed_boost = classes.isin(["Druid", "Shaman"])
-    constraints.append(has_speed_boost.values @ x >= boss_constraints.loc["Min Speed Boosts"])
-
-    has_immunity = classes.isin(["Paladin", "Demon Hunter", "Rogue", "Hunter", "Mage"])
-    constraints.append(has_immunity.values @ x >= boss_constraints.loc["Min Immunities"])
-
-    is_hunter = classes == "Hunter"
-    constraints.append(is_hunter.values @ x >= boss_constraints.loc["Min Hunters"])
-
-    is_rogue = classes == "Rogue"
-    constraints.append(is_rogue.values @ x >= boss_constraints.loc["Min Rogues"])
-
-    is_boomkin = (classes == "Druid") & is_rdps
-    constraints.append(is_boomkin.values @ x >= boss_constraints.loc["Min Boomkin"])
-
-    # Run optimization
-    squared_loot_needs = (loot_needs ** 2) * np.sign(loot_needs)
-    objective = cp.Maximize(cp.sum(cp.multiply(x, squared_loot_needs)))
-    prob = cp.Problem(objective, constraints)
-    prob.solve(verbose=True)
-    if prob.status != "optimal":
-        return None
-    roster_opt = pd.DataFrame(x.value, index=player_info.index, columns=boss_constraints.columns).astype("int")
-    return roster_opt
-
-
-def optimize_v2(options, boss_constraints, player_info, player_constraints, loot_needs):
-    n_players = player_info.shape[0]
-    n_bosses = boss_constraints.shape[1]
-    n_raiders = boss_constraints.loc["Raiders"]
-    n_tanks = boss_constraints.loc["Tanks"]
-    n_healers = boss_constraints.loc["Healers"]
-    min_mdps = boss_constraints.loc["Min Melee"]
-    max_mdps = boss_constraints.loc["Max Melee"]
-    min_rdps = n_raiders - n_tanks - n_healers - max_mdps
     max_rdps = n_raiders - n_tanks - n_healers - min_mdps
 
     roles = player_info["Role"]
@@ -293,7 +204,7 @@ def optimize_comp(request: flask.Request):
             loot_needs,
         ) = parse_json(json_data)
         loot_needs = clean_loot_needs(loot_needs, options)
-        opt_results = optimize_v2(options, boss_constraints, player_info, player_constraints, loot_needs)
+        opt_results = optimize(options, boss_constraints, player_info, player_constraints, loot_needs)
         if opt_results is None:
             return "Problem is infeasible. Check the constraints.", 500
         # Ensure the output has 50 rows and 14 columns
