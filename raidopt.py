@@ -13,6 +13,7 @@ characters = roster_data["Character"]
 is_tank = roster_data["Role"] == "1-Tank"
 is_healer = roster_data["Role"] == "2-Healer"
 is_melee = roster_data["Role"] == "3-mDPS"
+is_hunter = roster_data["Class"] == "Hunter"
 has_immunity = roster_data["Class"].isin(["Paladin", "Demon Hunter", "Rogue", "Hunter", "Mage"])
 
 # Parse boss preferences and rescale so higher values => more preference
@@ -42,6 +43,7 @@ n_healers = constraint_df["Healers"]
 min_melee = constraint_df["Min Melee"]
 max_melee = constraint_df["Max Melee"]
 n_immunities = constraint_df["Immunities"]
+min_hunters = constraint_df["Min Hunters"]
 
 # Read fixed comp inputs
 fixed_comp_df = (
@@ -102,6 +104,7 @@ constraints = [
     is_melee.values @ x >= min_melee,
     is_melee.values @ x <= max_melee,
     has_immunity.values @ x >= n_immunities,
+    is_hunter.values @ x >= min_hunters,
 ]
 for required_class in ["Monk", "Priest", "Demon Hunter", "Warrior", "Mage", "Warlock"]:
     is_class = roster_data["Class"] == required_class
