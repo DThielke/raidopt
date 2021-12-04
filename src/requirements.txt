@@ -1,0 +1,5 @@
+cvxopt==1.2.7
+cvxpy==1.1.17
+flask==1.1.2
+numpy==1.21.4
+pandas==1.3.4
