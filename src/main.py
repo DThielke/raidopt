@@ -133,18 +133,6 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
         cp.sum(x_rdps, axis=0) >= min_rdps,
         cp.sum(x_rdps, axis=0) <= max_rdps,
     ]
-
-    # Class buff constraints:
-    for required_class in [
-        "Monk",
-        "Priest",
-        "Demon Hunter",
-        "Warrior",
-        "Mage",
-        "Warlock",
-    ]:
-        is_class = player_info["Class"] == required_class
-        constraints.append(is_class.values @ is_in >= 1)
     for main in player_info["Main"].unique():
         player_bosses_incl_alts = cp.sum(is_in[player_info["Main"] == main], axis=0)
         constraints.append(player_bosses_incl_alts >= main_constraints_min.loc[main])
@@ -152,17 +140,26 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
         constraints.append(cp.sum(player_bosses_incl_alts * vault_bosses) >= min_bosses_per_player[main])
 
     # Custom constraints:
-    has_speed_boost = classes.isin(["Druid", "Shaman"])
-    constraints.append(has_speed_boost.values @ is_in >= boss_constraints.loc["Min Speed Boosts"])
-
     has_immunity = classes.isin(["Paladin", "Demon Hunter", "Rogue", "Hunter", "Mage"])
     constraints.append(has_immunity.values @ is_in >= boss_constraints.loc["Min Immunities"])
 
-    is_hunter = classes == "Hunter"
-    constraints.append(is_hunter.values @ is_in >= boss_constraints.loc["Min Hunters"])
+    has_speed_boost = classes.isin(["Druid", "Shaman"])
+    constraints.append(has_speed_boost.values @ is_in >= boss_constraints.loc["Min Speed Boosts"])
 
-    is_rogue = classes == "Rogue"
-    constraints.append(is_rogue.values @ is_in >= boss_constraints.loc["Min Rogues"])
+    for required_class in [
+        "Monk",
+        "Demon Hunter",
+        "Warrior",
+        "Mage",
+        "Priest",
+        "Warlock",
+        "Hunter",
+        "Rogue",
+        "Paladin",
+    ]:
+        is_class = player_info["Class"] == required_class
+        min_class = np.minimum(is_class @ character_constraints_max, boss_constraints.loc[f"Min {required_class}s"])
+        constraints.append(is_class.values @ is_in >= min_class)
 
     is_boomkin = (classes == "Druid") & is_rdps
     constraints.append(is_boomkin.values @ is_in >= boss_constraints.loc["Min Boomkin"])
