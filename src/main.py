@@ -17,7 +17,8 @@ def parse_json(json_data):
 
     player_constraints = pd.DataFrame(json_data["playerConstraints"][1:], columns=json_data["playerConstraints"][0])
     player_constraints = player_constraints.set_index("Character")
-    player_constraints = player_constraints.drop(columns="").drop(index="")
+    player_constraints = player_constraints.drop(columns="", errors="ignore").drop(index="", errors="ignore")
+
 
     player_info = player_constraints[["Status", "Role", "2nd Role", "Class", "Main"]]
     player_info.loc[player_info["Main"] == "", "Main"] = None
