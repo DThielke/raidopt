@@ -80,6 +80,7 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
     max_mdps = boss_constraints.loc["Max Melee"]
     min_rdps = n_raiders - n_tanks - n_healers - max_mdps
     max_rdps = n_raiders - n_tanks - n_healers - min_mdps
+    vault_bosses = boss_constraints.loc["Include for Vault"]
 
     roles = player_info["Role"]
     roles2 = player_info["2nd Role"]
@@ -148,7 +149,7 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
         player_bosses_incl_alts = cp.sum(is_in[player_info["Main"] == main], axis=0)
         constraints.append(player_bosses_incl_alts >= main_constraints_min.loc[main])
         constraints.append(player_bosses_incl_alts <= main_constraints_max.loc[main])
-        constraints.append(cp.sum(player_bosses_incl_alts) >= min_bosses_per_player[main])
+        constraints.append(cp.sum(player_bosses_incl_alts * vault_bosses) >= min_bosses_per_player[main])
 
     # Custom constraints:
     has_speed_boost = classes.isin(["Druid", "Shaman"])
