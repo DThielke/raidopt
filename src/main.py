@@ -1,4 +1,4 @@
-from flask import escape, abort
+from flask import abort
 import flask
 import cvxpy as cp
 import numpy as np
@@ -102,10 +102,9 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
     character_constraints_min = player_constraints.fillna(0).astype("int")
     character_constraints_max = player_constraints.fillna(1).astype("int")
     # If we're forcing the player to be out for too many bosses, we need to relax the vault constraint
-    min_bosses_per_player = np.minimum(
-        options["Min Bosses for Vault"],
-        n_bosses - (main_constraints_max == 0).sum(axis=1),
-    )
+    ignore_for_vault = main_constraints_max == 0
+    ignore_for_vault[vault_bosses[vault_bosses == 0].index] = True
+    min_bosses_per_player = np.minimum(options["Min Bosses for Vault"], n_bosses - ignore_for_vault.sum(axis=1))
 
     # Variables:
     x_tank = cp.Variable((n_players, n_bosses), integer=True)
