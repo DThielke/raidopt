@@ -45,6 +45,7 @@ def parse_json(json_data):
 
 def clean_loot_needs(loot_needs, options):
     n_bosses = loot_needs.shape[1]
+    loot_needs = loot_needs.applymap(lambda s: s.upper() if type(s) == str else s)
     loot_needs = loot_needs.replace("P", n_bosses + 1)  # don't care if in
     loot_needs = loot_needs.replace("O", n_bosses + 101)  # really don't want to be in
     loot_needs = loot_needs.astype("int")
