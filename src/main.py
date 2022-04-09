@@ -20,9 +20,14 @@ def parse_json(json_data):
     player_constraints = player_constraints.drop(columns="", errors="ignore").drop(index="", errors="ignore")
 
 
-    player_info = player_constraints[["Status", "Role", "2nd Role", "Class", "Main"]]
+    player_info = player_constraints[["Status", "Role", "2nd Role", "Class", "Main", "Min Bosses for Vault"]]
     player_info.loc[player_info["Main"] == "", "Main"] = None
     player_info["Main"] = player_info["Main"].fillna(player_info.index.to_series())
+    player_info["Min Bosses for Vault"] = (
+        pd.to_numeric(player_info["Min Bosses for Vault"])
+        .fillna(general_options["Min Bosses for Vault"])
+        .astype("int")
+    )
 
     player_constraints = player_constraints.drop(columns=player_info.columns)
     player_constraints = player_constraints.replace("", np.nan)
@@ -88,6 +93,7 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
     roles2 = player_info["2nd Role"]
     classes = player_info["Class"]
     mains = player_info["Main"]
+    min_bosses_for_vault = player_info["Min Bosses for Vault"]
     is_tank = (roles == "1-Tank") | (roles2 == "1-Tank")
     is_healer = (roles == "2-Healer") | (roles2 == "2-Healer")
     is_mdps = (roles == "3-mDPS") | (roles2 == "3-mDPS")
@@ -102,10 +108,11 @@ def optimize(options, boss_constraints, player_info, player_constraints, loot_ne
     main_constraints_max = player_constraints.fillna(1).groupby(mains).max()
     character_constraints_min = player_constraints.fillna(0).astype("int")
     character_constraints_max = player_constraints.fillna(1).astype("int")
-    # If we're forcing the player to be out for too many bosses, we need to relax the vault constraint
-    ignore_for_vault = main_constraints_max == 0
-    ignore_for_vault[vault_bosses[vault_bosses == 0].index] = True
-    min_bosses_per_player = np.minimum(options["Min Bosses for Vault"], n_bosses - ignore_for_vault.sum(axis=1))
+    # Relax the vault constraint as needed
+    ignore_for_vault = main_constraints_max == 0  # ignore bosses where the player is forced out
+    ignore_for_vault[vault_bosses[vault_bosses == 0].index] = True  # ignore bosses that don't count for vault
+    min_bosses_for_vault = min_bosses_for_vault.loc[ignore_for_vault.index]
+    min_bosses_per_player = np.minimum(min_bosses_for_vault, n_bosses - ignore_for_vault.sum(axis=1))
 
     # Variables:
     x_tank = cp.Variable((n_players, n_bosses), integer=True)
@@ -212,7 +219,15 @@ def optimize_comp(request: flask.Request):
         opt_roster = opt_roster.reset_index().reindex(range(50)).set_index("Character").fillna(0)
         opt_roster = opt_roster.T.reset_index().reindex(range(14)).set_index("Boss").fillna(0).T
         player_info = player_info.reset_index().reindex(range(50)).set_index("Character")
-        result = pd.concat([player_info, opt_roster], axis=1).reset_index().T.reset_index().T.to_json(orient="values")
+        result = (
+            pd.concat([player_info, opt_roster], axis=1)
+            .drop(columns="Min Bosses for Vault")
+            .reset_index()
+            .T
+            .reset_index()
+            .T
+            .to_json(orient="values")
+        )
     except:
         return traceback.format_exc(), 500
     return result
